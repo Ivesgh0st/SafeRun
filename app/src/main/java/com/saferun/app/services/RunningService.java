@@ -45,6 +45,8 @@ public class RunningService extends Service implements SensorEventListener {
     // ── Binder: permite a Activity se conectar ao Service ───────────────
     private final IBinder binder = new RunBinder();
 
+    private boolean sessionSaved = false;
+
     public class RunBinder extends Binder {
         public RunningService getService() {
             return RunningService.this;
@@ -189,8 +191,10 @@ public class RunningService extends Service implements SensorEventListener {
 
     // ── Processa cada nova posição GPS ───────────────────────────────────
     private void processLocation(Location loc) {
+        // Ignora leituras com precisão ruim (acima de 20 metros de erro)
+        if (loc.getAccuracy() > 20f) return;
+
         if (lastLocation == null) {
-            // Primeira leitura: guarda como ponto de partida
             startLat = loc.getLatitude();
             startLng = loc.getLongitude();
             lastLocation = loc;
@@ -199,15 +203,14 @@ public class RunningService extends Service implements SensorEventListener {
 
         float distance = lastLocation.distanceTo(loc);
 
-        // Filtra ruído: só conta se moveu mais de 1 metro
-        if (distance > 1f) {
+        // Reduzimos o filtro de 1f para 0.5f
+        if (distance > 0.5f) {
             totalDistance += distance;
             lastMovementTime = System.currentTimeMillis();
             lastLocation = loc;
 
             if (callback != null) {
                 callback.onDistanceUpdated(totalDistance);
-                // Converte velocidade de m/s para km/h
                 callback.onSpeedUpdated(loc.getSpeed() * 3.6f);
             }
         }
@@ -292,6 +295,10 @@ public class RunningService extends Service implements SensorEventListener {
 
     // ── Salva a sessão no banco Room ─────────────────────────────────────
     private void saveSession() {
+        // Evita salvar duas vezes
+        if (sessionSaved) return;
+        sessionSaved = true;
+
         RunSession session = new RunSession();
         session.date = new Date();
         session.distanceMeters = totalDistance;
@@ -299,7 +306,6 @@ public class RunningService extends Service implements SensorEventListener {
         session.startLat = startLat;
         session.startLng = startLng;
 
-        // Room não pode rodar na thread principal, usa uma thread separada
         Executors.newSingleThreadExecutor().execute(() ->
                 AppDatabase.getInstance(this).runSessionDao().insert(session));
     }
@@ -315,6 +321,8 @@ public class RunningService extends Service implements SensorEventListener {
             if (nm != null) nm.createNotificationChannel(channel);
         }
     }
+
+
 
     private Notification buildNotification() {
         PendingIntent pi = PendingIntent.getActivity(
@@ -337,3 +345,4 @@ public class RunningService extends Service implements SensorEventListener {
         stopTracking();
     }
 }
+
