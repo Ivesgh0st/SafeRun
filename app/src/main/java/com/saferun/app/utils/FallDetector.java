@@ -14,8 +14,7 @@ public class FallDetector {
     private boolean freeFallDetected = false;
     private long freeFallTimestamp = 0;
 
-    // Este método é chamado a cada leitura do acelerômetro
-    // x, y, z são os valores dos 3 eixos do sensor
+   
     public boolean detect(float x, float y, float z) {
 
         // Calcula a força total de aceleração nos 3 eixos

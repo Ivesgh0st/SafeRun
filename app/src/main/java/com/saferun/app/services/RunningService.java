@@ -37,12 +37,12 @@ import java.util.concurrent.Executors;
 
 public class RunningService extends Service implements SensorEventListener {
 
-    // ── Constantes ───────────────────────────────────────────────────────
+    // Constantes
     private static final String CHANNEL_ID = "saferun_channel";
     private static final int NOTIFICATION_ID = 1;
     private static final long LOCATION_INTERVAL_MS = 3000;
 
-    // ── Binder ───────────────────────────────────────────────────────────
+    // Binder
     private final IBinder binder = new RunBinder();
 
     public class RunBinder extends Binder {
@@ -51,7 +51,7 @@ public class RunningService extends Service implements SensorEventListener {
         }
     }
 
-    // ── Interface de callback ────────────────────────────────────────────
+    // Interface de callback
     public interface RunningCallback {
         void onDistanceUpdated(double distanceMeters);
         void onSpeedUpdated(float speedKmh);
@@ -62,7 +62,7 @@ public class RunningService extends Service implements SensorEventListener {
 
     private RunningCallback callback;
 
-    // ── GPS ──────────────────────────────────────────────────────────────
+    // GPS
     private FusedLocationProviderClient fusedClient;
     private LocationCallback locationCallback;
     private Location lastLocation;
@@ -70,12 +70,12 @@ public class RunningService extends Service implements SensorEventListener {
     private long lastMovementTime;
     private double startLat, startLng;
 
-    // ── Acelerômetro ─────────────────────────────────────────────────────
+    // Acelerômetro
     private SensorManager sensorManager;
     private Sensor accelerometer;
     private FallDetector fallDetector;
 
-    // ── Controle de estado ───────────────────────────────────────────────
+    // Controle de estado
     private boolean isTracking = false;
     private boolean alertCancelled = false;
     private boolean sessionSaved = false;
@@ -86,7 +86,7 @@ public class RunningService extends Service implements SensorEventListener {
     private final Handler stopHandler = new Handler(Looper.getMainLooper());
     private Runnable stopCheckRunnable;
 
-    // ────────────────────────────────────────────────────────────────────
+
     @Override
     public void onCreate() {
         super.onCreate();
@@ -110,7 +110,7 @@ public class RunningService extends Service implements SensorEventListener {
         return binder;
     }
 
-    // ── Inicia o rastreamento ────────────────────────────────────────────
+    // Inicia o rastreamento
     public void startTracking() {
         if (isTracking) return;
         isTracking = true;
@@ -148,7 +148,7 @@ public class RunningService extends Service implements SensorEventListener {
         scheduleStopCheck();
     }
 
-    // ── Pausa ────────────────────────────────────────────────────────────
+    // Pausa
     public void pauseTracking() {
         isTracking = false;
         pauseStart = SystemClock.elapsedRealtime();
@@ -157,13 +157,13 @@ public class RunningService extends Service implements SensorEventListener {
         stopHandler.removeCallbacks(stopCheckRunnable);
     }
 
-    // ── Retoma ───────────────────────────────────────────────────────────
+    // Retoma
     public void resumeTracking() {
         pausedElapsed += SystemClock.elapsedRealtime() - pauseStart;
         startTracking();
     }
 
-    // ── Para e salva ─────────────────────────────────────────────────────
+    // Parar e salvar
     public void stopTracking() {
         isTracking = false;
         fusedClient.removeLocationUpdates(locationCallback);
@@ -179,7 +179,7 @@ public class RunningService extends Service implements SensorEventListener {
         return SystemClock.elapsedRealtime() - startTimeMillis - pausedElapsed;
     }
 
-    // ── Processa nova posição GPS ────────────────────────────────────────
+    // Processa nova posição GPS
     private void processLocation(Location loc) {
         // Ignora leituras com precisão ruim
         if (loc.getAccuracy() > 20f) return;
@@ -212,7 +212,7 @@ public class RunningService extends Service implements SensorEventListener {
         }
     }
 
-    // ── Acelerômetro ─────────────────────────────────────────────────────
+    // Acelerômetro
     @Override
     public void onSensorChanged(SensorEvent event) {
         if (event.sensor.getType() != Sensor.TYPE_ACCELEROMETER) return;
@@ -236,7 +236,7 @@ public class RunningService extends Service implements SensorEventListener {
     @Override
     public void onAccuracyChanged(Sensor sensor, int accuracy) {}
 
-    // ── Detecção de parada ───────────────────────────────────────────────
+    // Detecção de parada
     private void scheduleStopCheck() {
         stopCheckRunnable = new Runnable() {
             @Override
@@ -268,7 +268,7 @@ public class RunningService extends Service implements SensorEventListener {
         stopHandler.postDelayed(stopCheckRunnable, 10000);
     }
 
-    // ── Alerta de emergência ─────────────────────────────────────────────
+    //  Alerta de emergência
     private void sendAlert(String reason) {
         String phone = getSharedPreferences("saferun_prefs", 0)
                 .getString("emergency_phone", "");
@@ -280,7 +280,7 @@ public class RunningService extends Service implements SensorEventListener {
         }
     }
 
-    // ── Salva sessão no banco ────────────────────────────────────────────
+    // Salva sessão no banco de dados
     private void saveSession() {
         if (sessionSaved) return;
         sessionSaved = true;
@@ -296,7 +296,7 @@ public class RunningService extends Service implements SensorEventListener {
                 AppDatabase.getInstance(this).runSessionDao().insert(session));
     }
 
-    // ── Notificação persistente ──────────────────────────────────────────
+    //  Notificação persistente
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(

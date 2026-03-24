@@ -23,7 +23,7 @@ import java.util.List;
 public class RunActivity extends AppCompatActivity
         implements RunningService.RunningCallback {
 
-    // ── Variáveis de UI ─────────────────────────────────────────────────
+    // Variáveis de UI
     private TextView tvDistance;
     private TextView tvSpeed;
     private TextView tvStatus;
@@ -31,12 +31,12 @@ public class RunActivity extends AppCompatActivity
     private MaterialButton btnStop;
     private MaterialButton btnPause;
 
-    // ── Variáveis do Mapa ────────────────────────────────────────────────
+    // Variáveis do Mapa
     private GoogleMap googleMap;
     private final List<LatLng> routePoints = new ArrayList<>();
     private static final int CAMERA_ZOOM = 17;
 
-    // ── Variáveis do Serviço ─────────────────────────────────────────────
+    // Variáveis do Serviço
     private RunningService runningService;
     private boolean serviceBound = false;
     private boolean isPaused = false;
@@ -75,7 +75,7 @@ public class RunActivity extends AppCompatActivity
         startService(serviceIntent);
         bindService(serviceIntent, serviceConnection, BIND_AUTO_CREATE);
 
-        // Inicializa o mapa
+        // Inicia o mapa
         SupportMapFragment mapFragment = (SupportMapFragment)
                 getSupportFragmentManager().findFragmentById(R.id.map);
         if (mapFragment != null) {
@@ -138,7 +138,7 @@ public class RunActivity extends AppCompatActivity
         finish();
     }
 
-    // ── Callbacks do RunningService ──────────────────────────────────────
+    // Callbacks do RunningService
 
     @Override
     public void onDistanceUpdated(double distanceMeters) {

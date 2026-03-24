@@ -12,7 +12,7 @@ import androidx.room.TypeConverters;
 @TypeConverters({DateConverter.class})
 public abstract class AppDatabase extends RoomDatabase {
 
-    // Instância única do banco (padrão Singleton)
+    // Instância única do banco
     private static volatile AppDatabase instance;
 
     // Dá acesso às operações do banco

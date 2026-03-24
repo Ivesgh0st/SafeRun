@@ -4,11 +4,11 @@ import androidx.room.Entity;
 import androidx.room.PrimaryKey;
 import java.util.Date;
 
-// Esta classe representa UMA corrida salva no banco
+
 @Entity(tableName = "run_sessions")
 public class RunSession {
 
-    // ID único gerado automaticamente pelo banco
+    // ID gerado automaticamente pelo banco
     @PrimaryKey(autoGenerate = true)
     public int id;
 
@@ -21,7 +21,7 @@ public class RunSession {
     // Duração total em segundos
     public int durationSeconds;
 
-    // Ponto de início da corrida (coordenadas GPS)
+    // Ponto de início da corrida
     public double startLat;
     public double startLng;
 }

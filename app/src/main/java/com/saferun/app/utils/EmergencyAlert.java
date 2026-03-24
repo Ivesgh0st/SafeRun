@@ -18,7 +18,7 @@ public class EmergencyAlert {
     public static void send(Context context, String phone,
                             String reason, double lat, double lng) {
 
-        // Monta o link do Google Maps com as coordenadas atuais
+        // Monta o link do Google Maps com a localização atual
         String mapsLink = "https://maps.google.com/?q=" + lat + "," + lng;
 
         // Monta a mensagem completa do SMS
