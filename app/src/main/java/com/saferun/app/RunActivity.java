@@ -10,12 +10,20 @@ import android.widget.Chronometer;
 import android.widget.TextView;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import com.google.android.gms.maps.CameraUpdateFactory;
+import com.google.android.gms.maps.GoogleMap;
+import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.android.material.button.MaterialButton;
 import com.saferun.app.services.RunningService;
+import java.util.ArrayList;
+import java.util.List;
 
 public class RunActivity extends AppCompatActivity
         implements RunningService.RunningCallback {
 
+    // ── Variáveis de UI ─────────────────────────────────────────────────
     private TextView tvDistance;
     private TextView tvSpeed;
     private TextView tvStatus;
@@ -23,6 +31,12 @@ public class RunActivity extends AppCompatActivity
     private MaterialButton btnStop;
     private MaterialButton btnPause;
 
+    // ── Variáveis do Mapa ────────────────────────────────────────────────
+    private GoogleMap googleMap;
+    private final List<LatLng> routePoints = new ArrayList<>();
+    private static final int CAMERA_ZOOM = 17;
+
+    // ── Variáveis do Serviço ─────────────────────────────────────────────
     private RunningService runningService;
     private boolean serviceBound = false;
     private boolean isPaused = false;
@@ -61,6 +75,21 @@ public class RunActivity extends AppCompatActivity
         startService(serviceIntent);
         bindService(serviceIntent, serviceConnection, BIND_AUTO_CREATE);
 
+        // Inicializa o mapa
+        SupportMapFragment mapFragment = (SupportMapFragment)
+                getSupportFragmentManager().findFragmentById(R.id.map);
+        if (mapFragment != null) {
+            mapFragment.getMapAsync(map -> {
+                googleMap = map;
+                try {
+                    googleMap.setMyLocationEnabled(true);
+                } catch (SecurityException e) {
+                    e.printStackTrace();
+                }
+                googleMap.getUiSettings().setZoomControlsEnabled(true);
+            });
+        }
+
         // Inicia o cronômetro
         chronometer.setBase(SystemClock.elapsedRealtime());
         chronometer.start();
@@ -69,7 +98,7 @@ public class RunActivity extends AppCompatActivity
         btnStop.setOnClickListener(v -> confirmStop());
     }
 
-    // Alterna entre pausar e retomar a corrida
+    // Alterna entre pausar e retomar
     private void togglePause() {
         isPaused = !isPaused;
         if (isPaused) {
@@ -87,7 +116,7 @@ public class RunActivity extends AppCompatActivity
         }
     }
 
-    // Pede confirmação antes de encerrar
+    // Confirmação antes de encerrar
     private void confirmStop() {
         new AlertDialog.Builder(this)
                 .setTitle("Encerrar corrida?")
@@ -97,7 +126,7 @@ public class RunActivity extends AppCompatActivity
                 .show();
     }
 
-    // Encerra a corrida e volta para a tela principal
+    // Encerra a corrida
     private void stopRun() {
         chronometer.stop();
         if (serviceBound) {
@@ -126,7 +155,7 @@ public class RunActivity extends AppCompatActivity
     @Override
     public void onFallDetected() {
         runOnUiThread(() -> {
-            tvStatus.setText("⚠ QUEDA DETECTADA!");
+            tvStatus.setText("QUEDA DETECTADA!");
             showEmergencyCountdown("Queda detectada!");
         });
     }
@@ -134,16 +163,40 @@ public class RunActivity extends AppCompatActivity
     @Override
     public void onSuspiciousStop() {
         runOnUiThread(() -> {
-            tvStatus.setText("⚠ PARADA SUSPEITA!");
+            tvStatus.setText("PARADA SUSPEITA!");
             showEmergencyCountdown("Parada prolongada detectada!");
         });
     }
 
-    // Diálogo de contagem regressiva antes do alerta
+    // Atualiza a posição no mapa e desenha a rota
+    @Override
+    public void onLocationChanged(double lat, double lng) {
+        runOnUiThread(() -> {
+            if (googleMap == null) return;
+
+            LatLng point = new LatLng(lat, lng);
+            routePoints.add(point);
+
+            // Redesenha a rota completa
+            googleMap.clear();
+            if (routePoints.size() > 1) {
+                googleMap.addPolyline(new PolylineOptions()
+                        .addAll(routePoints)
+                        .width(8f)
+                        .color(0xFF2E7D32)); // linha verde
+            }
+
+            // Move câmera para posição atual
+            googleMap.animateCamera(
+                    CameraUpdateFactory.newLatLngZoom(point, CAMERA_ZOOM));
+        });
+    }
+
+    // Diálogo de contagem regressiva
     private void showEmergencyCountdown(String reason) {
         new AlertDialog.Builder(this)
                 .setTitle("🚨 " + reason)
-                .setMessage("Alerta será enviado em 30 segundos.\nToque CANCELAR se estiver bem.")
+                .setMessage("Alerta em 30 segundos.\nToque CANCELAR se estiver bem.")
                 .setPositiveButton("CANCELAR ALERTA", (d, w) -> {
                     tvStatus.setText("Correndo");
                     if (serviceBound) runningService.cancelAlert();

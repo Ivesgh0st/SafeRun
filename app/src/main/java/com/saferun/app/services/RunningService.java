@@ -37,15 +37,13 @@ import java.util.concurrent.Executors;
 
 public class RunningService extends Service implements SensorEventListener {
 
-    // ── Constantes ──────────────────────────────────────────────────────
+    // ── Constantes ───────────────────────────────────────────────────────
     private static final String CHANNEL_ID = "saferun_channel";
     private static final int NOTIFICATION_ID = 1;
-    private static final long LOCATION_INTERVAL_MS = 3000; // atualiza GPS a cada 3s
+    private static final long LOCATION_INTERVAL_MS = 3000;
 
-    // ── Binder: permite a Activity se conectar ao Service ───────────────
+    // ── Binder ───────────────────────────────────────────────────────────
     private final IBinder binder = new RunBinder();
-
-    private boolean sessionSaved = false;
 
     public class RunBinder extends Binder {
         public RunningService getService() {
@@ -53,17 +51,18 @@ public class RunningService extends Service implements SensorEventListener {
         }
     }
 
-    // ── Interface de callback: avisa a Activity sobre eventos ───────────
+    // ── Interface de callback ────────────────────────────────────────────
     public interface RunningCallback {
         void onDistanceUpdated(double distanceMeters);
         void onSpeedUpdated(float speedKmh);
         void onFallDetected();
         void onSuspiciousStop();
+        void onLocationChanged(double lat, double lng);
     }
 
     private RunningCallback callback;
 
-    // ── GPS ─────────────────────────────────────────────────────────────
+    // ── GPS ──────────────────────────────────────────────────────────────
     private FusedLocationProviderClient fusedClient;
     private LocationCallback locationCallback;
     private Location lastLocation;
@@ -71,7 +70,7 @@ public class RunningService extends Service implements SensorEventListener {
     private long lastMovementTime;
     private double startLat, startLng;
 
-    // ── Acelerômetro ────────────────────────────────────────────────────
+    // ── Acelerômetro ─────────────────────────────────────────────────────
     private SensorManager sensorManager;
     private Sensor accelerometer;
     private FallDetector fallDetector;
@@ -79,6 +78,7 @@ public class RunningService extends Service implements SensorEventListener {
     // ── Controle de estado ───────────────────────────────────────────────
     private boolean isTracking = false;
     private boolean alertCancelled = false;
+    private boolean sessionSaved = false;
     private long startTimeMillis;
     private long pausedElapsed = 0;
     private long pauseStart = 0;
@@ -90,7 +90,6 @@ public class RunningService extends Service implements SensorEventListener {
     @Override
     public void onCreate() {
         super.onCreate();
-        // Inicializa os componentes de GPS e sensores
         fusedClient = LocationServices.getFusedLocationProviderClient(this);
         sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
@@ -100,10 +99,9 @@ public class RunningService extends Service implements SensorEventListener {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        // startForeground mantém o serviço vivo mesmo com tela bloqueada
         startForeground(NOTIFICATION_ID, buildNotification());
         startTracking();
-        return START_STICKY; // reinicia automaticamente se o sistema matar o serviço
+        return START_STICKY;
     }
 
     @Nullable
@@ -120,10 +118,9 @@ public class RunningService extends Service implements SensorEventListener {
         startTimeMillis = SystemClock.elapsedRealtime();
         lastMovementTime = System.currentTimeMillis();
 
-        // Configura o GPS com alta precisão
         LocationRequest request = new LocationRequest.Builder(
                 Priority.PRIORITY_HIGH_ACCURACY, LOCATION_INTERVAL_MS)
-                .setMinUpdateDistanceMeters(1f)
+                .setMinUpdateDistanceMeters(0.5f)
                 .build();
 
         locationCallback = new LocationCallback() {
@@ -143,7 +140,6 @@ public class RunningService extends Service implements SensorEventListener {
             e.printStackTrace();
         }
 
-        // Registra o acelerômetro para detectar quedas
         if (accelerometer != null) {
             sensorManager.registerListener(this, accelerometer,
                     SensorManager.SENSOR_DELAY_NORMAL);
@@ -152,7 +148,7 @@ public class RunningService extends Service implements SensorEventListener {
         scheduleStopCheck();
     }
 
-    // ── Pausa o rastreamento ─────────────────────────────────────────────
+    // ── Pausa ────────────────────────────────────────────────────────────
     public void pauseTracking() {
         isTracking = false;
         pauseStart = SystemClock.elapsedRealtime();
@@ -161,13 +157,13 @@ public class RunningService extends Service implements SensorEventListener {
         stopHandler.removeCallbacks(stopCheckRunnable);
     }
 
-    // ── Retoma o rastreamento ────────────────────────────────────────────
+    // ── Retoma ───────────────────────────────────────────────────────────
     public void resumeTracking() {
         pausedElapsed += SystemClock.elapsedRealtime() - pauseStart;
         startTracking();
     }
 
-    // ── Para o rastreamento e salva a sessão ─────────────────────────────
+    // ── Para e salva ─────────────────────────────────────────────────────
     public void stopTracking() {
         isTracking = false;
         fusedClient.removeLocationUpdates(locationCallback);
@@ -176,34 +172,32 @@ public class RunningService extends Service implements SensorEventListener {
         saveSession();
     }
 
-    public void cancelAlert() {
-        alertCancelled = true;
-    }
+    public void cancelAlert() { alertCancelled = true; }
+    public void setCallback(RunningCallback cb) { this.callback = cb; }
 
-    public void setCallback(RunningCallback cb) {
-        this.callback = cb;
-    }
-
-    // Retorna o tempo total rodando (descontando pausas)
     public long getElapsedMillis() {
         return SystemClock.elapsedRealtime() - startTimeMillis - pausedElapsed;
     }
 
-    // ── Processa cada nova posição GPS ───────────────────────────────────
+    // ── Processa nova posição GPS ────────────────────────────────────────
     private void processLocation(Location loc) {
-        // Ignora leituras com precisão ruim (acima de 20 metros de erro)
+        // Ignora leituras com precisão ruim
         if (loc.getAccuracy() > 20f) return;
 
         if (lastLocation == null) {
             startLat = loc.getLatitude();
             startLng = loc.getLongitude();
             lastLocation = loc;
+            // Atualiza o mapa mesmo na primeira leitura
+            if (callback != null) {
+                callback.onLocationChanged(
+                        loc.getLatitude(), loc.getLongitude());
+            }
             return;
         }
 
         float distance = lastLocation.distanceTo(loc);
 
-        // Reduzimos o filtro de 1f para 0.5f
         if (distance > 0.5f) {
             totalDistance += distance;
             lastMovementTime = System.currentTimeMillis();
@@ -212,26 +206,23 @@ public class RunningService extends Service implements SensorEventListener {
             if (callback != null) {
                 callback.onDistanceUpdated(totalDistance);
                 callback.onSpeedUpdated(loc.getSpeed() * 3.6f);
+                callback.onLocationChanged(
+                        loc.getLatitude(), loc.getLongitude());
             }
         }
     }
 
-    // ── Leitura do acelerômetro ──────────────────────────────────────────
+    // ── Acelerômetro ─────────────────────────────────────────────────────
     @Override
     public void onSensorChanged(SensorEvent event) {
         if (event.sensor.getType() != Sensor.TYPE_ACCELEROMETER) return;
         if (!isTracking || alertCancelled) return;
 
-        float x = event.values[0];
-        float y = event.values[1];
-        float z = event.values[2];
-
-        // Passa os valores para o FallDetector analisar
-        if (fallDetector.detect(x, y, z)) {
+        if (fallDetector.detect(
+                event.values[0], event.values[1], event.values[2])) {
             isTracking = false;
             if (callback != null) callback.onFallDetected();
 
-            // Aguarda 30s; se não cancelado, dispara o alerta
             new Handler(Looper.getMainLooper()).postDelayed(() -> {
                 if (!alertCancelled) {
                     sendAlert("Possivel queda detectada durante corrida.");
@@ -243,18 +234,15 @@ public class RunningService extends Service implements SensorEventListener {
     }
 
     @Override
-    public void onAccuracyChanged(Sensor sensor, int accuracy) {
-        // Não utilizado
-    }
+    public void onAccuracyChanged(Sensor sensor, int accuracy) {}
 
-    // ── Verifica se o usuário parou por muito tempo ──────────────────────
+    // ── Detecção de parada ───────────────────────────────────────────────
     private void scheduleStopCheck() {
         stopCheckRunnable = new Runnable() {
             @Override
             public void run() {
                 if (!isTracking) return;
 
-                // Busca o tempo limite configurado pelo usuário (padrão: 30s)
                 long timeout = getSharedPreferences("saferun_prefs", 0)
                         .getInt("stop_timeout_seconds", 30) * 1000L;
 
@@ -266,7 +254,7 @@ public class RunningService extends Service implements SensorEventListener {
 
                     new Handler(Looper.getMainLooper()).postDelayed(() -> {
                         if (!alertCancelled) {
-                            sendAlert("Parada prolongada detectada durante corrida.");
+                            sendAlert("Parada prolongada detectada.");
                         }
                         alertCancelled = false;
                         isTracking = true;
@@ -274,14 +262,13 @@ public class RunningService extends Service implements SensorEventListener {
                     }, 30000);
                 }
 
-                // Verifica novamente daqui a 10 segundos
                 stopHandler.postDelayed(this, 10000);
             }
         };
         stopHandler.postDelayed(stopCheckRunnable, 10000);
     }
 
-    // ── Envia o alerta de emergência ─────────────────────────────────────
+    // ── Alerta de emergência ─────────────────────────────────────────────
     private void sendAlert(String reason) {
         String phone = getSharedPreferences("saferun_prefs", 0)
                 .getString("emergency_phone", "");
@@ -293,9 +280,8 @@ public class RunningService extends Service implements SensorEventListener {
         }
     }
 
-    // ── Salva a sessão no banco Room ─────────────────────────────────────
+    // ── Salva sessão no banco ────────────────────────────────────────────
     private void saveSession() {
-        // Evita salvar duas vezes
         if (sessionSaved) return;
         sessionSaved = true;
 
@@ -310,19 +296,16 @@ public class RunningService extends Service implements SensorEventListener {
                 AppDatabase.getInstance(this).runSessionDao().insert(session));
     }
 
-    // ── Notificação persistente (exigida pelo Foreground Service) ────────
+    // ── Notificação persistente ──────────────────────────────────────────
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(
-                    CHANNEL_ID,
-                    "SafeRun Ativo",
+                    CHANNEL_ID, "SafeRun Ativo",
                     NotificationManager.IMPORTANCE_LOW);
             NotificationManager nm = getSystemService(NotificationManager.class);
             if (nm != null) nm.createNotificationChannel(channel);
         }
     }
-
-
 
     private Notification buildNotification() {
         PendingIntent pi = PendingIntent.getActivity(
@@ -335,7 +318,7 @@ public class RunningService extends Service implements SensorEventListener {
                 .setContentText("Monitorando sua corrida com seguranca")
                 .setSmallIcon(R.drawable.ic_run)
                 .setContentIntent(pi)
-                .setOngoing(true) // não pode ser dispensada pelo usuário
+                .setOngoing(true)
                 .build();
     }
 
@@ -345,4 +328,3 @@ public class RunningService extends Service implements SensorEventListener {
         stopTracking();
     }
 }
-
